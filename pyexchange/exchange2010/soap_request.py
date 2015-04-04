@@ -76,14 +76,20 @@ def delete_field(field_uri):
   return root
 
 
-def get_item(exchange_id, format=u"Default"):
+def get_item(exchange_id, format=u"Default", include_mime_content=False, additional_properties=None):
   """
-    Requests a calendar item from the store.
+    Requests an item from the store.
 
-    exchange_id is the id for this event in the Exchange store.
+    exchange_id; is the id for this item in the Exchange store.
 
-    format controls how much data you get back from Exchange. Full docs are here, but acceptible values
+    format; controls how much data you get back from Exchange. Full docs are here, but acceptable values
     are IdOnly, Default, and AllProperties.
+
+    include_mime_content: Includes mime content. Applicable only to messages
+
+    additional_properties: A list of FieldURI if special properties should be included. Applicable only to events
+
+    Example for a calendar request:
 
     http://msdn.microsoft.com/en-us/library/aa564509(v=exchg.140).aspx
 
@@ -95,9 +101,41 @@ def get_item(exchange_id, format=u"Default"):
       <m:ItemIds>
           <t:ItemId Id="{exchange_id}"/>
       </m:ItemIds>
-  </m:GetItem>
+    </m:GetItem>
 
+    Example for a message request:
+
+    <?xml version="1.0" encoding="utf-8"?>
+    <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
+      xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
+      <soap:Body>
+        <GetItem xmlns="http://schemas.microsoft.com/exchange/services/2006/messages">
+          <ItemShape>
+            <t:BaseShape>IdOnly</t:BaseShape>
+            <t:AdditionalProperties>
+              <t:FieldURI FieldURI="item:Subject"/>
+            </t:AdditionalProperties>
+          </ItemShape>
+          <ItemIds>
+            <t:ItemId Id="AsdD89=" ChangeKey="Jajs3=="/>
+          </ItemIds>
+        </GetItem>
+      </soap:Body>
+    </soap:Envelope>
   """
+
+  item_shape_children = [T.BaseShape(format)]
+
+  # The get_item method cannot use both at the same time (calendar vs message version of get_item)
+  if include_mime_content and additional_properties:
+    raise Exception("Error in get_item: Both include_mime_content and additional_properties cannot be supplied"
+                    "at the same time. ")
+  elif additional_properties:
+    field_uris_array = [T.FieldURI(FieldURI=curr_field_uri) for curr_field_uri in additional_properties]
+    additional_properties_item = [T.BaseShape(format), field_uris_array]
+    item_shape_children += additional_properties_item
+  elif include_mime_content:
+    item_shape_children += [T.IncludeMimeContent(str(include_mime_content).lower())]
 
   elements = list()
   if type(exchange_id) == list:
@@ -106,13 +144,10 @@ def get_item(exchange_id, format=u"Default"):
   else:
     elements = [T.ItemId(Id=exchange_id)]
 
+
   root = M.GetItem(
-    M.ItemShape(
-      T.BaseShape(format)
-    ),
-    M.ItemIds(
-      *elements
-    )
+    M.ItemShape(*item_shape_children),
+    M.ItemIds(*elements)
   )
   return root
 
