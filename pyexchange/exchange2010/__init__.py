@@ -7,6 +7,7 @@ Unless required by applicable law or agreed to in writing, software?distributed 
 
 import logging
 from ..base.calendar import BaseExchangeCalendarEvent, BaseExchangeCalendarService, ExchangeEventOrganizer, ExchangeEventResponse
+from ..base.message import BaseExchangeMessage, BaseExchangeMessageService
 from ..base.folder import BaseExchangeFolder, BaseExchangeFolderService
 from ..base.soap import ExchangeServiceSOAP
 from ..exceptions import FailedExchangeException, ExchangeStaleChangeKeyException, ExchangeItemNotFoundException, ExchangeInternalServerTransientErrorException, ExchangeIrresolvableConflictException, InvalidEventType
@@ -28,7 +29,7 @@ class Exchange2010Service(ExchangeServiceSOAP):
     return Exchange2010CalendarService(service=self, calendar_id=id)
 
   def mail(self):
-    raise NotImplementedError("Sorry - nothin' here. Feel like adding it? :)")
+    return Exchange2010MessageService(service=self, calendar_id=id)
 
   def contacts(self):
     raise NotImplementedError("Sorry - nothin' here. Feel like adding it? :)")
@@ -912,3 +913,380 @@ class Exchange2010Folder(BaseExchangeFolder):
       return id_element.get(u"Id", None), id_element.get(u"ChangeKey", None)
     else:
       return None, None
+
+
+class Exchange2010MessageService(BaseExchangeMessageService):
+
+  def event(self, exchange_id=None, **kwargs):
+    return Exchange2010Message(service=self.service, id=id, **kwargs)
+
+  def get_message(self, id):
+    return Exchange2010Message(service=self.service, id=id)
+
+  def new_message(self, **properties):
+    return Exchange2010Message(service=self.service, calendar_id=self.calendar_id, **properties)
+
+  def list_messages(self, start=None, end=None, details=False):
+    return Exchange2010MessageList(service=self.service, start=start, end=end, details=details)
+
+  def list_messages(self, start=None, end=None, details=False):
+    return Exchange2010MessageList(service=self.service, start=start, end=end, details=details)
+
+
+class Exchange2010MessageList(object):
+  """
+  Creates & Stores a list of Exchange2010CalendarEvent items in the "self.events" variable.
+  """
+  def __init__(self, service=None, start=None, end=None):
+    self.service = service
+    self.count = 0
+    self.start = start
+    self.end = end
+    self.events = list()
+    self.event_ids = list()
+    self.details = details
+
+    # This request uses a Calendar-specific query between two dates.
+    body = soap_request.get_calendar_items(format=u'AllProperties', start=self.start, end=self.end)
+    response_xml = self.service.send(body)
+    self._parse_response_for_all_events(response_xml)
+
+    # Populate the event ID list, for convenience reasons.
+    for event in self.events:
+      self.event_ids.append(event._id)
+
+    # If we have requested all the details, basically repeat the previous 3 steps,
+    # but instead of start/stop, we have a list of ID fields.
+    if self.details:
+      log.debug(u'Received request for all details, retrieving now!')
+      self.load_all_details()
+    return
+
+  def _parse_response_for_all_events(self, response):
+    """
+    This function will retrieve *most* of the event data, excluding Organizer & Attendee details
+    """
+    items = response.xpath(u'//m:FindItemResponseMessage/m:RootFolder/t:Items/t:CalendarItem', namespaces=soap_request.NAMESPACES)
+    if not items:
+      items = response.xpath(u'//m:GetItemResponseMessage/m:Items/t:CalendarItem', namespaces=soap_request.NAMESPACES)
+    if items:
+      self.count = len(items)
+      log.debug(u'Found %s items' % self.count)
+
+      for item in items:
+        self._add_event(xml=soap_request.M.Items(deepcopy(item)))
+    else:
+      log.debug(u'No calendar items found with search parameters.')
+
+    return self
+
+  def _add_event(self, xml=None):
+    log.debug(u'Adding new event to all events list.')
+    event = Exchange2010CalendarEvent(service=self.service, xml=xml)
+    log.debug(u'Subject of new event is %s' % event.subject)
+    self.events.append(event)
+    return self
+
+  def load_all_details(self):
+    """
+    This function will execute all the event lookups for known events.
+
+    This is intended for use when you want to have a completely populated event entry, including
+    Organizer & Attendee details.
+    """
+    log.debug(u"Loading all details")
+    if self.count > 0:
+      # Now, empty out the events to prevent duplicates!
+      del(self.events[:])
+
+      # Send the SOAP request with the list of exchange ID values.
+      log.debug(u"Requesting all event details for events: {event_list}".format(event_list=str(self.event_ids)))
+      body = soap_request.get_item(exchange_id=self.event_ids, format=u'AllProperties')
+      response_xml = self.service.send(body)
+
+      # Re-parse the results for all the details!
+      self._parse_response_for_all_events(response_xml)
+
+    return self
+
+class Exchange2010Message(BaseExchangeMessage):
+
+  def _init_from_service(self, exchange_id):
+    log.debug(u'Creating new Exchange2010Message object from ID')
+    body = soap_request.get_item(exchange_id=exchange_id, format=u'AllProperties')
+    response_xml = self.service.send(body)
+    properties = self._parse_response_for_get_message(response_xml)
+
+    self._update_properties(properties)
+    self._id = exchange_id
+    log.debug(u'Created new event object with ID: %s' % self._id)
+
+    self._reset_dirty_attributes()
+
+    return self
+
+  def _init_from_xml(self, xml=None):
+    log.debug(u'Creating new Exchange2010Message object from XML')
+
+    properties = self._parse_response_for_get_message(xml)
+    self._update_properties(properties)
+    self._id, self._change_key = self._parse_id_and_change_key_from_response(xml)
+
+    log.debug(u'Created new event object with ID: %s' % self._id)
+    self._reset_dirty_attributes()
+
+    return self
+
+  def as_json(self):
+    raise NotImplementedError
+
+  def validate(self):
+
+    if self.recurrence is not None:
+
+      if not (isinstance(self.recurrence_end_date, date)):
+        raise ValueError('recurrence_end_date must be of type date')
+      elif (self.recurrence_end_date < self.start.date()):
+        raise ValueError('recurrence_end_date must be after start')
+
+      if self.recurrence == u'daily':
+
+        if not (isinstance(self.recurrence_interval, int) and 1 <= self.recurrence_interval <= 999):
+          raise ValueError('recurrence_interval must be an int in the range from 1 to 999')
+
+      elif self.recurrence == u'weekly':
+
+        if not (isinstance(self.recurrence_interval, int) and 1 <= self.recurrence_interval <= 99):
+          raise ValueError('recurrence_interval must be an int in the range from 1 to 99')
+
+        if self.recurrence_days is None:
+          raise ValueError('recurrence_days is required')
+        for day in self.recurrence_days.split(' '):
+          if day not in self.WEEKLY_DAYS:
+            raise ValueError('recurrence_days received unknown value: %s' % day)
+
+      elif self.recurrence == u'monthly':
+
+        if not (isinstance(self.recurrence_interval, int) and 1 <= self.recurrence_interval <= 99):
+          raise ValueError('recurrence_interval must be an int in the range from 1 to 99')
+
+      elif self.recurrence == u'yearly':
+
+        pass  # everything is pulled from start
+
+      else:
+
+        raise ValueError('recurrence received unknown value: %s' % self.recurrence)
+
+    super(Exchange2010Message, self).validate()
+
+  def create(self):
+    """
+    Creates an event in Exchange. ::
+
+        event = service.calendar().new_event(
+          subject=u"80s Movie Night",
+          location = u"My house",
+        )
+        event.create()
+
+    Invitations to attendees are sent out immediately.
+
+    """
+    self.validate()
+    body = soap_request.new_event(self)
+
+    response_xml = self.service.send(body)
+    self._id, self._change_key = self._parse_id_and_change_key_from_response(response_xml)
+
+    return self
+
+
+  def update(self, calendar_item_update_operation_type=u'SendToAllAndSaveCopy', **kwargs):
+    """
+    Updates an event in Exchange.  ::
+
+        event = service.calendar().get_event(id='KEY HERE')
+        event.location = u'New location'
+        event.update()
+
+    If no changes to the event have been made, this method does nothing.
+
+    Notification of the change event is sent to all users. If you wish to just notify people who were
+    added, specify ``send_only_to_changed_attendees=True``.
+    """
+    if not self.id:
+      raise TypeError(u"You can't update an event that hasn't been created yet.")
+
+    if 'send_only_to_changed_attendees' in kwargs:
+      warnings.warn(
+        "The argument send_only_to_changed_attendees is deprecated.  Use calendar_item_update_operation_type instead.",
+        DeprecationWarning,
+      )  # 20140502
+      if kwargs['send_only_to_changed_attendees']:
+        calendar_item_update_operation_type = u'SendToChangedAndSaveCopy'
+
+    VALID_UPDATE_OPERATION_TYPES = (
+      u'SendToNone', u'SendOnlyToAll', u'SendOnlyToChanged',
+      u'SendToAllAndSaveCopy', u'SendToChangedAndSaveCopy',
+    )
+    if calendar_item_update_operation_type not in VALID_UPDATE_OPERATION_TYPES:
+      raise ValueError('calendar_item_update_operation_type has unknown value')
+
+    self.validate()
+
+    if self._dirty_attributes:
+      log.debug(u"Updating these attributes: %r" % self._dirty_attributes)
+      self.refresh_change_key()
+
+      body = soap_request.update_item(self, self._dirty_attributes, calendar_item_update_operation_type=calendar_item_update_operation_type)
+      self.service.send(body)
+      self._reset_dirty_attributes()
+    else:
+      log.info(u"Update was called, but there's nothing to update. Doing nothing.")
+
+    return self
+
+  def move_to(self, folder_id):
+    """
+    :param str folder_id: The Calendar ID to where you want to move the event to.
+    Moves an event to a different folder (calendar).  ::
+
+      event = service.calendar().get_event(id='KEY HERE')
+      event.move_to(folder_id='NEW CALENDAR KEY HERE')
+    """
+    if not folder_id:
+      raise TypeError(u"You can't move an event to a non-existant folder")
+
+    if not isinstance(folder_id, BASESTRING_TYPES):
+      raise TypeError(u"folder_id must be a string")
+
+    if not self.id:
+      raise TypeError(u"You can't move an event that hasn't been created yet.")
+
+    self.refresh_change_key()
+    response_xml = self.service.send(soap_request.move_event(self, folder_id))
+    new_id, new_change_key = self._parse_id_and_change_key_from_response(response_xml)
+    if not new_id:
+      raise ValueError(u"MoveItem returned success but requested item not moved")
+
+    self._id = new_id
+    self._change_key = new_change_key
+    self.calendar_id = folder_id
+    return self
+
+
+
+
+  def refresh_change_key(self):
+
+    body = soap_request.get_item(exchange_id=self._id, format=u"IdOnly")
+    response_xml = self.service.send(body)
+    self._id, self._change_key = self._parse_id_and_change_key_from_response(response_xml)
+
+    return self
+
+  def _parse_id_and_change_key_from_response(self, response):
+
+    id_elements = response.xpath(u'//m:Items/t:CalendarItem/t:ItemId', namespaces=soap_request.NAMESPACES)
+
+    if id_elements:
+      id_element = id_elements[0]
+      return id_element.get(u"Id", None), id_element.get(u"ChangeKey", None)
+    else:
+      return None, None
+
+  def _parse_response_for_get_message(self, response):
+
+    result = self._parse_event_properties(response)
+
+    result[u'_resources'] = self._build_resource_dictionary([ExchangeEventResponse(**resource) for resource in resource_properties])
+
+    result['_conflicting_event_ids'] = self._parse_event_conflicts(response)
+
+    return result
+
+  def _parse_event_properties(self, response):
+
+    property_map = {
+      u'subject': {
+        u'xpath': u'//m:Items/t:CalendarItem/t:Subject',
+      },
+      u'location':
+      {
+        u'xpath': u'//m:Items/t:CalendarItem/t:Location',
+      },
+      u'availability':
+      {
+        u'xpath': u'//m:Items/t:CalendarItem/t:LegacyFreeBusyStatus',
+      },
+      u'start':
+      {
+        u'xpath': u'//m:Items/t:CalendarItem/t:Start',
+        u'cast': u'datetime',
+      },
+      u'end':
+      {
+        u'xpath': u'//m:Items/t:CalendarItem/t:End',
+        u'cast': u'datetime',
+      },
+      u'html_body':
+      {
+        u'xpath': u'//m:Items/t:CalendarItem/t:Body[@BodyType="HTML"]',
+      },
+      u'text_body':
+      {
+        u'xpath': u'//m:Items/t:CalendarItem/t:Body[@BodyType="Text"]',
+      },
+      u'_type':
+      {
+        u'xpath': u'//m:Items/t:CalendarItem/t:CalendarItemType',
+      },
+      u'reminder_minutes_before_start':
+      {
+        u'xpath': u'//m:Items/t:CalendarItem/t:ReminderMinutesBeforeStart',
+        u'cast': u'int',
+      },
+      u'is_all_day':
+      {
+        u'xpath': u'//m:Items/t:CalendarItem/t:IsAllDayEvent',
+        u'cast': u'bool',
+      },
+      u'recurrence_end_date':
+      {
+        u'xpath': u'//m:Items/t:CalendarItem/t:Recurrence/t:EndDateRecurrence/t:EndDate',
+        u'cast': u'date_only_naive',
+      },
+      u'recurrence_interval':
+      {
+        u'xpath': u'//m:Items/t:CalendarItem/t:Recurrence/*/t:Interval',
+        u'cast': u'int',
+      },
+      u'recurrence_days':
+      {
+        u'xpath': u'//m:Items/t:CalendarItem/t:Recurrence/t:WeeklyRecurrence/t:DaysOfWeek',
+      },
+    }
+
+    result = self.service._xpath_to_dict(element=response, property_map=property_map, namespace_map=soap_request.NAMESPACES)
+
+    try:
+      recurrence_node = response.xpath(u'//m:Items/t:CalendarItem/t:Recurrence', namespaces=soap_request.NAMESPACES)[0]
+    except IndexError:
+      recurrence_node = None
+
+    if recurrence_node is not None:
+
+      if recurrence_node.find('t:DailyRecurrence', namespaces=soap_request.NAMESPACES) is not None:
+        result['recurrence'] = 'daily'
+
+      elif recurrence_node.find('t:WeeklyRecurrence', namespaces=soap_request.NAMESPACES) is not None:
+        result['recurrence'] = 'weekly'
+
+      elif recurrence_node.find('t:AbsoluteMonthlyRecurrence', namespaces=soap_request.NAMESPACES) is not None:
+        result['recurrence'] = 'monthly'
+
+      elif recurrence_node.find('t:AbsoluteYearlyRecurrence', namespaces=soap_request.NAMESPACES) is not None:
+        result['recurrence'] = 'yearly'
+
+    return result

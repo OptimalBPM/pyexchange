@@ -27,7 +27,7 @@ class Test_EventDeletion(unittest.TestCase):
   def setUp(self):
 
     httpretty.register_uri(httpretty.POST, FAKE_EXCHANGE_URL,
-                                 body=GET_ITEM_RESPONSE.encode('utf-8'),
+                                 body=GET_CALENDAR_ITEM_RESPONSE.encode('utf-8'),
                                  content_type='text/xml; charset=utf-8')
 
     self.event = self.service.calendar().get_event(id=TEST_EVENT.id)

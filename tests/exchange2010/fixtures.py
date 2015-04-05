@@ -193,7 +193,7 @@ UPDATED_RESOURCE = ExchangeEventResponse(name=u'ɱăğĭč čăřρĕt', email=u
 
 RESOURCE_WITH_NO_EMAIL_ADDRESS = ExchangeEventResponse(name=u'I am also bad', email=None, required=True, response=RESPONSE_UNKNOWN, last_response=None)
 
-GET_ITEM_RESPONSE = u"""<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+GET_CALENDAR_ITEM_RESPONSE = u"""<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
   <s:Header>
     <h:ServerVersionInfo xmlns:h="http://schemas.microsoft.com/exchange/services/2006/types" xmlns="http://schemas.microsoft.com/exchange/services/2006/types" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" MajorVersion="14" MinorVersion="2" MajorBuildNumber="328" MinorBuildNumber="11"/>
   </s:Header>
@@ -1713,5 +1713,56 @@ LIST_EVENTS_RESPONSE = u"""<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/
         </m:FindItemResponseMessage>
       </m:ResponseMessages>
     </m:FindItemResponse>
+  </s:Body>
+</s:Envelope>"""
+
+
+GET_MESSAGE_ITEM_RESPONSE = """<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Header>
+    <h:ServerVersionInfo xmlns:h="http://schemas.microsoft.com/exchange/services/2006/types" xmlns="http://schemas.microsoft.com/exchange/services/2006/types" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" MajorVersion="15" MinorVersion="0" MajorBuildNumber="516" MinorBuildNumber="29"/>
+  </s:Header>
+  <s:Body xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <m:GetItemResponse xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
+      <m:ResponseMessages>
+        <m:GetItemResponseMessage ResponseClass="Success">
+          <m:ResponseCode>NoError</m:ResponseCode>
+          <m:Items>
+            <t:Message>
+              <t:MimeContent CharacterSet="UTF-8">UmVjZWl2ZWQ6IGZyb20gV1NSVjAzLlpJR0hPTUUuU0UgKDE5Mi4xNjguMC4yMDUpIGJ5IFdTUlYwMy5aSUdIT01FLlNFDQogKDE5Mi4xNjguMC4yMDUpIHdpdGggTWljcm9zb2Z0IFNNVFAgU2VydmVyIChUTFMpIGlkIDE1LjAuNTE2LjMyIHZpYSBNYWlsYm94DQogVHJhbnNwb3J0OyBNb24sIDMwIE1hciAyMDE1IDIzOjI0OjUxICswMjAwDQpSZWNlaXZlZDogZnJvbSBXU1JWMDMuWklHSE9NRS5TRSAoMTkyLjE2OC4wLjIwNSkgYnkgV1NSVjAzLlpJR0hPTUUuU0UNCiAoMTkyLjE2OC4wLjIwNSkgd2l0aCBNaWNyb3NvZnQgU01UUCBTZXJ2ZXIgKFRMUykgaWQgMTUuMC41MTYuMzI7IE1vbiwgMzAgTWFyDQogMjAxNSAyMzoyNDo1MSArMDIwMA0KUmVjZWl2ZWQ6IGZyb20gWzE5Mi4xNjguMC4yMzFdICgxOTIuMTY4LjAuMjMxKSBieSBXU1JWMDMuWklHSE9NRS5TRQ0KICgxOTIuMTY4LjAuMjA1KSB3aXRoIE1pY3Jvc29mdCBTTVRQIFNlcnZlciBpZCAxNS4wLjUxNi4zMiB2aWEgRnJvbnRlbmQNCiBUcmFuc3BvcnQ7IE1vbiwgMzAgTWFyIDIwMTUgMjM6MjQ6MzggKzAyMDANCk1lc3NhZ2UtSUQ6IDw1NTE5REM3Mi44MDIwNjAxQG1lbmlhbHRvb2xzLmNvbT4NCkRhdGU6IFR1ZSwgMzEgTWFyIDIwMTUgMDE6Mjk6NTQgKzAyMDANCkZyb206IE5pY2tsYXMgPG5pYm9AbWVuaWFsdG9vbHMuY29tPg0KVXNlci1BZ2VudDogTW96aWxsYS81LjAgKFgxMTsgTGludXggeDg2XzY0OyBydjozMS4wKSBHZWNrby8yMDEwMDEwMQ0KIFRodW5kZXJiaXJkLzMxLjUuMA0KVG86IDxtYWlsdGVzdGVyQHppZ2hvbWUuc2U+DQpTdWJqZWN0OiBIZXJlIFlvdSBHTyENCkNvbnRlbnQtVHlwZTogdGV4dC9wbGFpbjsgY2hhcnNldD0idXRmLTgiOyBmb3JtYXQ9Zmxvd2VkDQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiA3Yml0DQpSZXR1cm4tUGF0aDogbmlib0BtZW5pYWx0b29scy5jb20NClgtTVMtRXhjaGFuZ2UtT3JnYW5pemF0aW9uLU5ldHdvcmstTWVzc2FnZS1JZDogMzI4MGEwOWMtMDRhOS00YTdmLTQyNzctMDhkMjM5NDcxNzk0DQpYLU1TLUV4Y2hhbmdlLU9yZ2FuaXphdGlvbi1BVlN0YW1wLUVudGVycHJpc2U6IDEuMA0KWC1NUy1FeGNoYW5nZS1Pcmdhbml6YXRpb24tQXV0aFNvdXJjZTogV1NSVjAzLlpJR0hPTUUuU0UNClgtTVMtRXhjaGFuZ2UtT3JnYW5pemF0aW9uLUF1dGhBczogQW5vbnltb3VzDQpNSU1FLVZlcnNpb246IDEuMA0KDQpDb250ZW50DQo=</t:MimeContent>
+              <t:ItemId Id="AQAVAG1haWx0ZXN0ZXJAemlnaG9tZS5zZQBGAAADuhp42pOhvkytfnXB72q3LQcAr5TtAa/wIkiHTynS3S1jjAAAAw4AAACvlO0Br/AiSIdPKdLdLWOMAAADGgAAAA==" ChangeKey="CQAAABYAAACvlO0Br/AiSIdPKdLdLWOMAAAAAAB5"/>
+              <t:Subject>Here You GO!</t:Subject>
+              <t:Sensitivity>Normal</t:Sensitivity>
+              <t:Body BodyType="Text">Content&#13;
+</t:Body>
+              <t:Size>6111</t:Size>
+              <t:DateTimeSent>2015-03-30T23:29:54Z</t:DateTimeSent>
+              <t:DateTimeCreated>2015-03-30T21:24:51Z</t:DateTimeCreated>
+              <t:ResponseObjects>
+                <t:ReplyToItem/>
+                <t:ReplyAllToItem/>
+                <t:ForwardItem/>
+              </t:ResponseObjects>
+              <t:HasAttachments>false</t:HasAttachments>
+              <t:ToRecipients>
+                <t:Mailbox>
+                  <t:Name>Mail Tester</t:Name>
+                  <t:EmailAddress>mailtester@zighome.se</t:EmailAddress>
+                  <t:RoutingType>SMTP</t:RoutingType>
+                </t:Mailbox>
+              </t:ToRecipients>
+              <t:IsReadReceiptRequested>false</t:IsReadReceiptRequested>
+              <t:From>
+                <t:Mailbox>
+                  <t:Name>Nicklas</t:Name>
+                  <t:EmailAddress>nibo@menialtools.com</t:EmailAddress>
+                  <t:RoutingType>SMTP</t:RoutingType>
+                </t:Mailbox>
+              </t:From>
+              <t:IsRead>true</t:IsRead>
+            </t:Message>
+          </m:Items>
+        </m:GetItemResponseMessage>
+      </m:ResponseMessages>
+    </m:GetItemResponse>
   </s:Body>
 </s:Envelope>"""

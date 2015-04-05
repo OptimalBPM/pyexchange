@@ -30,7 +30,7 @@ class Test_UpdatingAnEvent(unittest.TestCase):
     HTTPretty.register_uri(
       HTTPretty.POST,
       FAKE_EXCHANGE_URL,
-      body=GET_ITEM_RESPONSE.encode('utf-8'),
+      body=GET_CALENDAR_ITEM_RESPONSE.encode('utf-8'),
       content_type='text/xml; charset=utf-8'
     )
 
